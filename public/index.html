@@ -70,10 +70,15 @@
       return btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
-    document.getElementById('proxyForm').addEventListener('submit', (e) => {
+    document.getElementById('proxyForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const url = document.getElementById('url').value.trim();
       if (!url) return;
+
+      if (!serviceReady && 'serviceWorker' in navigator) {
+        await navigator.serviceWorker.ready;
+        serviceReady = true;
+      }
 
       const encoded = encodeUrl(url);
       proxyFrame.src = `/service/${encoded}`;
