@@ -5,34 +5,111 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ultraviolet Proxy</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    form { margin-bottom: 20px; }
-    input { width: 100%; padding: 8px; margin: 5px 0; }
-    button { padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+    body { font-family: Arial, sans-serif; margin: 20px; background: #f7f7f9; }
+    .container { max-width: 980px; margin: 0 auto; }
+    form { margin-bottom: 16px; }
+    label { display: block; margin-bottom: 8px; font-weight: bold; }
+    input { width: 100%; padding: 10px; margin: 5px 0 12px 0; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 10px 18px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
     button:hover { background: #0056b3; }
+    #proxyFrame { width: 100%; height: 70vh; border: 1px solid #ccc; border-radius: 6px; display: none; background: white; }
+    .injector-toggle { position: fixed; right: 20px; bottom: 20px; width: 64px; height: 64px; border-radius: 50%; border: none; background: #ff5722; color: white; font-size: 18px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,0.18); }
+    .injector-panel { position: fixed; right: 20px; bottom: 100px; width: 360px; max-height: 70vh; background: white; border: 1px solid #ddd; border-radius: 10px; box-shadow: 0 12px 32px rgba(0,0,0,0.18); padding: 16px; display: none; z-index: 10000; }
+    .injector-panel textarea { width: 100%; height: 240px; border: 1px solid #ccc; border-radius: 6px; font-family: monospace; font-size: 13px; margin-bottom: 12px; padding: 10px; resize: vertical; }
+    .injector-panel .panel-actions { display: flex; gap: 8px; }
+    .injector-panel .panel-actions button { flex: 1; }
+    .note { margin-top: 8px; color: #333; }
   </style>
 </head>
 <body>
-  <h1>Ultraviolet Unblocking Proxy</h1>
-  <form id="proxyForm">
-    <label for="url">Website URL:</label>
-    <input type="url" id="url" name="url" placeholder="https://example.com" required>
-    <button type="submit">Go</button>
-  </form>
+  <div class="container">
+    <h1>Ultraviolet Proxy</h1>
+    <p>Enter a URL to load it through the Ultraviolet proxy. Use the JS button to inject custom code into the proxied page.</p>
+
+    <form id="proxyForm">
+      <label for="url">Website URL:</label>
+      <input type="url" id="url" name="url" placeholder="https://example.com" required>
+      <button type="submit">Load Proxied Page</button>
+    </form>
+
+    <iframe id="proxyFrame" title="Proxied page"></iframe>
+  </div>
+
+  <button id="injectorToggle" class="injector-toggle" title="Open JS injector">JS</button>
+  <div id="injectorPanel" class="injector-panel">
+    <h2 style="margin:0 0 12px 0;font-size:16px;">JS Injector</h2>
+    <textarea id="injectorCode" placeholder="Enter JavaScript code to inject into the proxied page..."></textarea>
+    <div class="panel-actions">
+      <button id="injectButton" type="button">Inject</button>
+      <button id="closeInjector" type="button" style="background:#6c757d;">Close</button>
+    </div>
+    <p class="note">The proxy page must be loaded before injecting. If the frame is blank, load a URL first.</p>
+  </div>
 
   <script>
-    // Register the service worker
+    let serviceReady = false;
+    const injectorPanel = document.getElementById('injectorPanel');
+    const proxyFrame = document.getElementById('proxyFrame');
+
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/uv/uv.sw.js', { scope: '/service/' })
-        .then(() => console.log('Service Worker registered'))
-        .catch(err => console.error('Service Worker registration failed', err));
+      navigator.serviceWorker.register('/service/uv.sw.js', { scope: '/service/' })
+        .then((registration) => {
+          console.log('Service Worker registered:', registration);
+          return navigator.serviceWorker.ready;
+        })
+        .then(() => {
+          serviceReady = true;
+          console.log('Ultraviolet service worker ready');
+        })
+        .catch(err => {
+          console.error('Service Worker registration failed', err);
+        });
+    }
+
+    function encodeUrl(url) {
+      return btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
     }
 
     document.getElementById('proxyForm').addEventListener('submit', (e) => {
       e.preventDefault();
-      const url = document.getElementById('url').value;
-      const encoded = btoa(url).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-      window.location.href = `/service/${encoded}`;
+      const url = document.getElementById('url').value.trim();
+      if (!url) return;
+
+      const encoded = encodeUrl(url);
+      proxyFrame.src = `/service/${encoded}`;
+      proxyFrame.style.display = 'block';
+      proxyFrame.focus();
+    });
+
+    document.getElementById('injectorToggle').addEventListener('click', () => {
+      injectorPanel.style.display = injectorPanel.style.display === 'block' ? 'none' : 'block';
+    });
+
+    document.getElementById('closeInjector').addEventListener('click', () => {
+      injectorPanel.style.display = 'none';
+    });
+
+    document.getElementById('injectButton').addEventListener('click', () => {
+      const code = document.getElementById('injectorCode').value;
+      if (!code.trim()) {
+        alert('Please enter JavaScript code to inject.');
+        return;
+      }
+      if (!proxyFrame.src) {
+        alert('Load a proxied page first.');
+        return;
+      }
+      try {
+        const doc = proxyFrame.contentDocument || proxyFrame.contentWindow.document;
+        const script = doc.createElement('script');
+        script.type = 'text/javascript';
+        script.textContent = code;
+        (doc.head || doc.documentElement).appendChild(script);
+        alert('Code injected successfully.');
+      } catch (err) {
+        console.error(err);
+        alert('Unable to inject code into the proxy frame. Make sure the page is loaded and the proxy is working.');
+      }
     });
   </script>
 </body>
