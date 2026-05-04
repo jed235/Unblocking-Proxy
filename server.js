@@ -1,5 +1,5 @@
 const express = require('express');
-const ultraviolet = require('ultraviolet');
+const ultraviolet = require('@titaniumnetwork-dev/ultraviolet');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
